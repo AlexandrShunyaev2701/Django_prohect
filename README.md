@@ -24,7 +24,7 @@
 начисляет сумму на баланс организации с payer_inn
 логирует изменение баланса (в отдельную таблицу или просто print / log)
 
-** GET `/api/v1/organizations/<inn>/balance/` **
+- **GET `/api/v1/organizations/<inn>/balance/`**
 Возвращает текущий баланс организации по ИНН:
   ```json
 {
