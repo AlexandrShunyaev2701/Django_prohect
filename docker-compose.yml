@@ -5,9 +5,9 @@ services:
     image: postgres:17
     container_name: postgresql-service
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgresql_pass
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -19,9 +19,21 @@ services:
       retries: 5
       start_period: 5s
 
-  redis-stack-server:
-    image: redis/redis-stack-server:latest
-    container_name: redis-stack-server
+  redis-cache:
+    image: redis:7
+    container_name: redis-cache
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis-celery:
+    image: redis:7
+    container_name: redis-celery
     ports:
       - "6379:6379"
     healthcheck:
@@ -38,8 +50,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minio_user
-      MINIO_ROOT_PASSWORD: minio_secret
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -62,7 +74,9 @@ services:
     depends_on:
       postgresql-service:
         condition: service_healthy
-      redis-stack-server:
+      redis-cache:
+        condition: service_healthy
+      redis-celery:
         condition: service_healthy
       minio-s3-srv:
         condition: service_healthy
@@ -80,7 +94,9 @@ services:
     depends_on:
       postgresql-service:
         condition: service_healthy
-      redis-stack-server:
+      redis-cache:
+        condition: service_healthy
+      redis-celery:
         condition: service_healthy
     command: celery -A django_project worker --loglevel=info --concurrency=4
     restart: always
@@ -92,7 +108,9 @@ services:
     depends_on:
       postgresql-service:
         condition: service_healthy
-      redis-stack-server:
+      redis-cache:
+        condition: service_healthy
+      redis-celery:
         condition: service_healthy
     command: celery -A django_project beat --loglevel=info
     restart: always
@@ -100,14 +118,13 @@ services:
   flower:
     image: mher/flower:latest
     container_name: flower
-    env_file: .env
     environment:
-      - CELERY_BROKER_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${REDIS_CELERY_URL}
     ports:
       - "5555:5555"
     depends_on:
-      - redis-stack-server
-    command: ["celery", "flower", "--broker=${REDIS_URL}", "--port=5555"]
+      - redis-celery
+    command: ["celery", "flower", "--broker=${REDIS_CELERY_URL}", "--port=5555"]
     restart: always
 
 volumes:
